@@ -12,7 +12,7 @@ import { codexService } from '../services/api/codexService';
 
 export const MainPage: React.FC = () => {
   const { settings, updateSettings, focusMode, toggleFocusMode, currentProject, activeDocumentId, updateChapter } = useAppStore();
-  const { isAuthenticated, user, checkAuth } = useAuthStore();
+  const { isAuthenticated, checkAuth } = useAuthStore();
   const [authChecked, setAuthChecked] = React.useState(false);
   const [isEditingTitle, setIsEditingTitle] = React.useState(false);
   const [editedTitle, setEditedTitle] = React.useState('');

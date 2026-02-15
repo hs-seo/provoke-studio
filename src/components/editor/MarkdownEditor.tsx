@@ -25,7 +25,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   // Selection tooltip state
   const [selectedText, setSelectedText] = useState('');
   const [selectionPosition, setSelectionPosition] = useState<{ top: number; left: number } | null>(null);
-  const [showTooltip, setShowTooltip] = useState(false);
+  const [, setShowTooltip] = useState(false);
   const [isImproving, setIsImproving] = useState(false);
   const [inlineSuggestion, setInlineSuggestion] = useState<{ original: string; improved: string } | null>(null);
   const [showContextMenu, setShowContextMenu] = useState(false);

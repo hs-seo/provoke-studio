@@ -4,7 +4,7 @@ import { FiCheck, FiLogOut, FiUser } from 'react-icons/fi';
 
 export const AISettingsOAuth: React.FC = () => {
   const { user, saveApiKey, logout, refreshUser } = useAuthStore();
-  const [provider, setProvider] = useState<'claude' | 'openai'>(user?.provider || 'claude');
+  const [provider, setProvider] = useState<'claude' | 'openai'>((user?.provider === 'claude' || user?.provider === 'openai' ? user.provider : 'claude') as 'claude' | 'openai');
   const [tempApiKey, setTempApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -41,7 +41,7 @@ export const AISettingsOAuth: React.FC = () => {
     }
   };
 
-  const isConfigured = provider === 'claude' ? user?.hasClaudeKey : user?.hasOpenaiKey;
+  const isConfigured = user?.isConfigured || false;
 
   return (
     <div className="max-w-2xl mx-auto p-6">
@@ -99,7 +99,7 @@ export const AISettingsOAuth: React.FC = () => {
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Anthropic의 Claude AI
               </p>
-              {user?.hasClaudeKey && (
+              {user?.isConfigured && provider === 'claude' && (
                 <div className="mt-2 text-xs text-green-600 dark:text-green-400">
                   ✓ 설정됨
                 </div>
@@ -125,7 +125,7 @@ export const AISettingsOAuth: React.FC = () => {
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 OpenAI GPT-4
               </p>
-              {user?.hasOpenaiKey && (
+              {user?.hasOpenAIToken && provider === 'openai' && (
                 <div className="mt-2 text-xs text-green-600 dark:text-green-400">
                   ✓ 설정됨
                 </div>

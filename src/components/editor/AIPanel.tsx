@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuthStore } from '../../store/useAuthStore';
-import { claudeServiceProxy, openaiServiceProxy } from '../../services/api/aiServiceProxy';
+import { claudeServiceProxy } from '../../services/api/aiServiceProxy';
 import { FiZap, FiRefreshCw, FiArrowRight } from 'react-icons/fi';
 
 interface AIPanelProps {

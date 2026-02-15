@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAIStore } from '../../store/useAIStore';
-import { FiCheck, FiX } from 'react-icons/fi';
+import { FiCheck } from 'react-icons/fi';
 
 export const AISettings: React.FC = () => {
   const { provider, apiKey, setProvider, setApiKey, isConfigured } = useAIStore();

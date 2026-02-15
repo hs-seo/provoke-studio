@@ -36,12 +36,12 @@ export const PlotForm: React.FC<PlotFormProps> = ({ onClose, plot }) => {
       updatePlot(plot.id, plotData);
     } else {
       const newPlot: Plot = {
+        ...plotData,
         id: Date.now().toString(),
-        ...plotData as Plot,
         timeline: timeline,
         createdAt: new Date(),
         updatedAt: new Date(),
-      };
+      } as Plot;
       addPlot(newPlot);
     }
 

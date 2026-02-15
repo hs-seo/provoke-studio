@@ -3,7 +3,7 @@ import { AIRequest, AIResponse } from '../../types';
 
 export class OpenAIService {
   private client: OpenAI | null = null;
-  private apiKey: string = '';
+  private _apiKey: string = '';
 
   constructor(apiKey?: string) {
     if (apiKey) {
@@ -12,7 +12,7 @@ export class OpenAIService {
   }
 
   setApiKey(apiKey: string) {
-    this.apiKey = apiKey;
+    this._apiKey = apiKey;
     this.client = new OpenAI({
       apiKey: apiKey,
       dangerouslyAllowBrowser: true, // For Tauri apps

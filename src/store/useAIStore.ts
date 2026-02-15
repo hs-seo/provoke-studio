@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { AIProvider, AIConfig } from '../types';
+import { AIProvider } from '../types';
 import { ClaudeService } from '../services/api/claude';
 import { OpenAIService } from '../services/api/openai';
 

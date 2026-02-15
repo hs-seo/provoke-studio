@@ -18,7 +18,7 @@ interface Suggestion {
   timestamp: number;
 }
 
-export const AIAssistant: React.FC<AIAssistantProps> = ({ content, onSuggestion, onReplace }) => {
+export const AIAssistant: React.FC<AIAssistantProps> = ({ content, onReplace }) => {
   const { user } = useAuthStore();
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);

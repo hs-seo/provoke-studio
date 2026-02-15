@@ -452,9 +452,9 @@ ${currentContent.slice(-2000)}
         updatedAt: new Date(),
       };
 
-      const { addChapter, setActiveDocument } = await import('../../store/useAppStore');
-      addChapter(newChapter);
-      setActiveDocument(newChapter.id);
+      const { addChapter: addChapterFn, setActiveDocument: setActiveDocumentFn } = useAppStore.getState();
+      addChapterFn(newChapter);
+      setActiveDocumentFn(newChapter.id);
 
       alert('✅ 다음 화가 작성되었습니다!');
     } catch (error: any) {
@@ -808,7 +808,7 @@ ${currentContent}
 
 const SettingsTab: React.FC = () => {
   const { settings, updateSettings } = useAppStore();
-  const { user, login } = useAuthStore();
+  const { user } = useAuthStore();
   const [selectedProvider, setSelectedProvider] = useState<'github' | 'openai-oauth' | 'anthropic' | 'openai'>('github');
   const [anthropicKey, setAnthropicKey] = useState('');
   const [openaiKey, setOpenaiKey] = useState('');
@@ -883,7 +883,7 @@ const SettingsTab: React.FC = () => {
               name="provider"
               value="github"
               checked={selectedProvider === 'github'}
-              onChange={(e) => setSelectedProvider('github')}
+              onChange={() => setSelectedProvider('github')}
               className="mt-1"
             />
             <div className="flex-1">
@@ -907,7 +907,7 @@ const SettingsTab: React.FC = () => {
               name="provider"
               value="openai-oauth"
               checked={selectedProvider === 'openai-oauth'}
-              onChange={(e) => setSelectedProvider('openai-oauth')}
+              onChange={() => setSelectedProvider('openai-oauth')}
               className="mt-1"
             />
             <div className="flex-1">
@@ -946,7 +946,7 @@ const SettingsTab: React.FC = () => {
               name="provider"
               value="anthropic"
               checked={selectedProvider === 'anthropic'}
-              onChange={(e) => setSelectedProvider('anthropic')}
+              onChange={() => setSelectedProvider('anthropic')}
               className="mt-1"
             />
             <div className="flex-1">
@@ -982,7 +982,7 @@ const SettingsTab: React.FC = () => {
               name="provider"
               value="openai"
               checked={selectedProvider === 'openai'}
-              onChange={(e) => setSelectedProvider('openai')}
+              onChange={() => setSelectedProvider('openai')}
               className="mt-1"
             />
             <div className="flex-1">

@@ -39,12 +39,12 @@ export const CharacterForm: React.FC<CharacterFormProps> = ({ onClose, character
       updateCharacter(character.id, characterData);
     } else {
       const newCharacter: Character = {
+        ...characterData,
         id: Date.now().toString(),
-        ...characterData as Character,
         relationships: [],
         createdAt: new Date(),
         updatedAt: new Date(),
-      };
+      } as Character;
       addCharacter(newCharacter);
     }
 
