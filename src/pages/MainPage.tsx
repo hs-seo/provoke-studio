@@ -6,7 +6,7 @@ import { ProjectSetup } from '../components/settings/ProjectSetup';
 import { OAuthLogin } from '../components/auth/OAuthLogin';
 import { useAppStore } from '../store/useAppStore';
 import { useAuthStore } from '../store/useAuthStore';
-import { FiMoon, FiSun, FiEye, FiEyeOff } from 'react-icons/fi';
+import { FiMoon, FiSun, FiEye, FiEyeOff, FiMonitor } from 'react-icons/fi';
 import { isTauri } from '../utils/platform';
 import { codexService } from '../services/api/codexService';
 
@@ -78,27 +78,51 @@ export const MainPage: React.FC = () => {
 
   // Apply theme
   useEffect(() => {
-    const root = document.documentElement;
-    console.log('Applying theme:', settings.theme);
+    const applyTheme = () => {
+      const root = document.documentElement;
+      const body = document.body;
 
-    // Remove any existing theme class first
-    root.classList.remove('dark');
+      console.log('Applying theme:', settings.theme);
 
-    if (settings.theme === 'dark') {
-      root.classList.add('dark');
-      console.log('Dark mode activated');
-    } else if (settings.theme === 'light') {
+      // Remove dark class from both html and body
       root.classList.remove('dark');
-      console.log('Light mode activated');
-    } else {
-      // Auto mode
-      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (isDark) {
-        root.classList.add('dark');
-        console.log('Auto mode: dark');
+      body.classList.remove('dark');
+
+      let shouldBeDark = false;
+
+      if (settings.theme === 'dark') {
+        shouldBeDark = true;
+        console.log('Dark mode: forced dark');
+      } else if (settings.theme === 'light') {
+        shouldBeDark = false;
+        console.log('Light mode: forced light');
       } else {
-        console.log('Auto mode: light');
+        // Auto mode - check system preference
+        shouldBeDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        console.log('Auto mode:', shouldBeDark ? 'dark' : 'light');
       }
+
+      // Apply dark class to both html and body
+      if (shouldBeDark) {
+        root.classList.add('dark');
+        body.classList.add('dark');
+        console.log('✅ Dark mode activated');
+      } else {
+        console.log('✅ Light mode activated');
+      }
+
+      // Force repaint
+      root.style.colorScheme = shouldBeDark ? 'dark' : 'light';
+    };
+
+    applyTheme();
+
+    // Listen for system theme changes in auto mode
+    if (settings.theme === 'auto') {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const handleChange = () => applyTheme();
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
     }
   }, [settings.theme]);
 
@@ -114,8 +138,33 @@ export const MainPage: React.FC = () => {
   }, [focusMode, toggleFocusMode]);
 
   const toggleTheme = () => {
-    const newTheme = settings.theme === 'dark' ? 'light' : 'dark';
+    // Cycle: light -> dark -> auto -> light
+    let newTheme: 'light' | 'dark' | 'auto';
+    if (settings.theme === 'light') {
+      newTheme = 'dark';
+    } else if (settings.theme === 'dark') {
+      newTheme = 'auto';
+    } else {
+      newTheme = 'light';
+    }
+    console.log(`Theme toggle: ${settings.theme} -> ${newTheme}`);
     updateSettings({ theme: newTheme });
+  };
+
+  // Get theme icon based on current theme
+  const getThemeIcon = (size: number, className?: string) => {
+    if (settings.theme === 'dark') {
+      return <FiSun size={size} className={className} />;
+    } else if (settings.theme === 'light') {
+      return <FiMoon size={size} className={className} />;
+    } else {
+      return <FiMonitor size={size} className={className} />;
+    }
+  };
+
+  const getThemeTitle = () => {
+    const nextTheme = settings.theme === 'light' ? '다크' : settings.theme === 'dark' ? '자동' : '라이트';
+    return `테마 전환 (현재: ${settings.theme === 'light' ? '라이트' : settings.theme === 'dark' ? '다크' : '자동'}, 클릭: ${nextTheme})`;
   };
 
   // Handle title editing
@@ -171,12 +220,9 @@ export const MainPage: React.FC = () => {
           <button
             onClick={toggleTheme}
             className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+            title={getThemeTitle()}
           >
-            {settings.theme === 'dark' ? (
-              <FiSun size={20} className="text-gray-300" />
-            ) : (
-              <FiMoon size={20} className="text-gray-700" />
-            )}
+            {getThemeIcon(20, settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}
           </button>
         </div>
         <ModelSelector />
@@ -230,13 +276,9 @@ export const MainPage: React.FC = () => {
               <button
                 onClick={toggleTheme}
                 className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                title="테마 전환"
+                title={getThemeTitle()}
               >
-                {settings.theme === 'dark' ? (
-                  <FiSun size={18} className="text-gray-300" />
-                ) : (
-                  <FiMoon size={18} className="text-gray-700" />
-                )}
+                {getThemeIcon(18, settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300')}
               </button>
             </div>
           </div>
@@ -248,13 +290,9 @@ export const MainPage: React.FC = () => {
             <button
               onClick={toggleTheme}
               className="p-3 rounded-lg bg-gray-800/80 dark:bg-gray-200/80 hover:bg-gray-700/80 dark:hover:bg-gray-300/80 backdrop-blur-sm transition-colors"
-              title="테마 전환"
+              title={getThemeTitle()}
             >
-              {settings.theme === 'dark' ? (
-                <FiSun size={20} className="text-white dark:text-gray-900" />
-              ) : (
-                <FiMoon size={20} className="text-white dark:text-gray-900" />
-              )}
+              {getThemeIcon(20, 'text-white dark:text-gray-900')}
             </button>
             <button
               onClick={toggleFocusMode}
