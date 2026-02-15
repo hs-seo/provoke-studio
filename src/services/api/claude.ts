@@ -3,7 +3,6 @@ import { AIRequest, AIResponse } from '../../types';
 
 export class ClaudeService {
   private client: Anthropic | null = null;
-  private _apiKey: string = '';
 
   constructor(apiKey?: string) {
     if (apiKey) {
@@ -12,7 +11,6 @@ export class ClaudeService {
   }
 
   setApiKey(apiKey: string) {
-    this._apiKey = apiKey;
     this.client = new Anthropic({
       apiKey: apiKey,
       dangerouslyAllowBrowser: true, // For Tauri apps
