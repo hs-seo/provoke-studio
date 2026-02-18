@@ -16,9 +16,10 @@ import {
   FiChevronRight,
   FiBarChart2,
   FiZap,
+  FiImage,
 } from 'react-icons/fi';
 
-type SidebarTab = 'documents' | 'characters' | 'plots' | 'analysis' | 'settings';
+type SidebarTab = 'documents' | 'characters' | 'plots' | 'analysis' | 'webtoon' | 'settings';
 
 export const Sidebar: React.FC = () => {
   const { isSidebarOpen, toggleSidebar, currentProject } = useAppStore();
@@ -102,6 +103,12 @@ export const Sidebar: React.FC = () => {
               onClick={() => setActiveTab('analysis')}
             />
             <TabButton
+              icon={<FiImage />}
+              label="웹툰화"
+              active={activeTab === 'webtoon'}
+              onClick={() => setActiveTab('webtoon')}
+            />
+            <TabButton
               icon={<FiSettings />}
               label="설정"
               active={activeTab === 'settings'}
@@ -123,6 +130,7 @@ export const Sidebar: React.FC = () => {
         {activeTab === 'characters' && <CharactersTab />}
         {activeTab === 'plots' && <PlotsTab />}
         {activeTab === 'analysis' && <AnalysisTab />}
+        {activeTab === 'webtoon' && <WebtoonTab />}
         {activeTab === 'settings' && <SettingsTab />}
       </div>
 
@@ -1182,6 +1190,188 @@ ${currentContent}
           <p>AI가 글을 분석하여</p>
           <p>캐릭터, 플롯, 부족한 요소를</p>
           <p>체크리스트로 보여줍니다</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const WebtoonTab: React.FC = () => {
+  const { currentProject, activeDocumentId } = useAppStore();
+  const { user } = useAuthStore();
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [scenes, setScenes] = useState<Array<{
+    id: string;
+    sceneNumber: number;
+    description: string;
+    imagePrompt: string;
+    characters: string[];
+  }>>([]);
+
+  const activeChapter = currentProject?.chapters.find(ch => ch.id === activeDocumentId);
+
+  const handleGenerateScenes = async () => {
+    if (!activeChapter?.content || !user?.isConfigured) {
+      alert('활성 문서의 내용이 없거나 AI가 설정되지 않았습니다.');
+      return;
+    }
+
+    if (activeChapter.content.length < 100) {
+      alert('스토리가 너무 짧습니다. 최소 100자 이상 작성해주세요.');
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const { claudeServiceProxy } = await import('../../services/api/aiServiceProxy');
+
+      // 1. 스토리를 장면별로 분할
+      const response = await claudeServiceProxy.generateText({
+        prompt: `당신은 웹툰 스토리보드 전문가입니다. 다음 스토리를 웹툰 장면(컷)으로 분할하고, 각 장면에 대한 시각적 설명을 제공하세요.
+
+**스토리**:
+${activeChapter.content}
+
+**요구사항**:
+- 스토리를 4-8개의 주요 장면으로 분할
+- 각 장면마다 다음 정보를 JSON 배열로 출력:
+  * sceneNumber: 장면 번호 (1부터 시작)
+  * description: 장면 설명 (1-2문장, 무슨 일이 일어나는지)
+  * imagePrompt: 이미지 생성을 위한 영어 프롬프트 (배경, 캐릭터, 감정, 구도 등 상세히)
+  * characters: 등장하는 캐릭터 이름 배열
+
+**출력 형식** (JSON만 출력, 다른 텍스트 없이):
+[
+  {
+    "sceneNumber": 1,
+    "description": "...",
+    "imagePrompt": "...",
+    "characters": ["..."]
+  }
+]`,
+        maxTokens: 2000,
+        temperature: 0.7,
+      });
+
+      if (response.text) {
+        try {
+          // JSON 파싱 시도
+          const jsonMatch = response.text.match(/\[[\s\S]*\]/);
+          if (jsonMatch) {
+            const parsedScenes = JSON.parse(jsonMatch[0]);
+            const scenesWithIds = parsedScenes.map((scene: any, index: number) => ({
+              ...scene,
+              id: `scene-${Date.now()}-${index}`,
+            }));
+            setScenes(scenesWithIds);
+          } else {
+            alert('AI 응답을 파싱할 수 없습니다. 다시 시도해주세요.');
+          }
+        } catch (parseError) {
+          console.error('JSON parse error:', parseError);
+          alert('AI 응답 형식이 올바르지 않습니다. 다시 시도해주세요.');
+        }
+      }
+    } catch (error) {
+      console.error('Scene generation error:', error);
+      alert('장면 생성 중 오류가 발생했습니다.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  if (!user?.isConfigured) {
+    return (
+      <div className="text-center text-sm text-gray-500 dark:text-gray-400 py-8">
+        AI를 설정해주세요 (설정 탭)
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+          스토리 → 웹툰 장면
+        </h3>
+        <button
+          onClick={handleGenerateScenes}
+          disabled={isGenerating || !activeChapter}
+          className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5"
+        >
+          <FiZap size={14} />
+          {isGenerating ? '생성 중...' : '장면 생성'}
+        </button>
+      </div>
+
+      <p className="text-xs text-gray-600 dark:text-gray-400">
+        현재 문서의 스토리를 웹툰 장면으로 분할하고, 각 장면의 시각적 이미지 프롬프트를 생성합니다.
+      </p>
+
+      {isGenerating && (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-3"></div>
+          <p className="text-xs text-gray-500">장면 분석 중...</p>
+        </div>
+      )}
+
+      {scenes.length > 0 && !isGenerating && (
+        <div className="space-y-3">
+          {scenes.map((scene) => (
+            <div
+              key={scene.id}
+              className="p-3 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg border border-purple-200 dark:border-purple-800"
+            >
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 bg-purple-600 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                    {scene.sceneNumber}
+                  </div>
+                  <h4 className="text-xs font-semibold text-gray-900 dark:text-white">
+                    장면 {scene.sceneNumber}
+                  </h4>
+                </div>
+              </div>
+
+              <p className="text-xs text-gray-700 dark:text-gray-300 mb-2">
+                {scene.description}
+              </p>
+
+              {scene.characters.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {scene.characters.map((char, idx) => (
+                    <span
+                      key={idx}
+                      className="px-2 py-0.5 bg-purple-200 dark:bg-purple-800 text-purple-900 dark:text-purple-100 text-xs rounded"
+                    >
+                      {char}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <div className="bg-white dark:bg-gray-800 rounded p-2 border border-gray-200 dark:border-gray-700">
+                <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                  🎨 이미지 프롬프트 (영문)
+                </div>
+                <p className="text-xs text-gray-600 dark:text-gray-400 font-mono">
+                  {scene.imagePrompt}
+                </p>
+              </div>
+            </div>
+          ))}
+
+          <div className="pt-2 text-xs text-gray-500 dark:text-gray-400 text-center">
+            💡 이미지 프롬프트를 DALL-E, Midjourney, Stable Diffusion 등에서 사용하세요
+          </div>
+        </div>
+      )}
+
+      {scenes.length === 0 && !isGenerating && (
+        <div className="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
+          <FiImage className="mx-auto mb-3 text-gray-400" size={40} />
+          <p>스토리를 웹툰 장면으로</p>
+          <p>변환해보세요</p>
         </div>
       )}
     </div>
