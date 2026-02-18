@@ -1315,7 +1315,25 @@ ${storyContent}
       }
     } catch (error: any) {
       console.error('Scene generation error:', error);
-      alert('장면 생성 중 오류가 발생했습니다.\n\n에러: ' + (error.message || error));
+
+      const errorMessage = error.message || String(error);
+
+      // Codex usage limit error
+      if (errorMessage.includes('usage limit')) {
+        const match = errorMessage.match(/try again at (.+?)\./);
+        const retryTime = match ? match[1] : '나중';
+
+        alert(
+          '⚠️ Codex CLI 사용량 제한에 도달했습니다.\n\n' +
+          `다시 사용 가능 시간: ${retryTime}\n\n` +
+          '해결 방법:\n' +
+          '1. 시간이 지난 후 다시 시도\n' +
+          '2. 설정 탭에서 OpenAI API Key를 입력하여 직접 사용\n' +
+          '3. https://chatgpt.com/codex/settings/usage 에서 크레딧 구매'
+        );
+      } else {
+        alert('장면 생성 중 오류가 발생했습니다.\n\n에러: ' + errorMessage);
+      }
     } finally {
       console.log('🏁 장면 생성 종료');
       setIsGenerating(false);
@@ -1354,7 +1372,25 @@ ${storyContent}
       ));
     } catch (error: any) {
       console.error('이미지 생성 오류:', error);
-      alert('이미지 생성 중 오류가 발생했습니다.\n\n' + (error.message || error));
+
+      const errorMessage = error.message || String(error);
+
+      // Codex usage limit error
+      if (errorMessage.includes('usage limit')) {
+        const match = errorMessage.match(/try again at (.+?)\./);
+        const retryTime = match ? match[1] : '나중';
+
+        alert(
+          '⚠️ Codex CLI 사용량 제한에 도달했습니다.\n\n' +
+          `다시 사용 가능 시간: ${retryTime}\n\n` +
+          '해결 방법:\n' +
+          '1. 시간이 지난 후 다시 시도 (2월 20일 오후 9:58)\n' +
+          '2. 설정 탭에서 OpenAI API Key를 입력하여 직접 사용\n' +
+          '3. https://chatgpt.com/codex/settings/usage 에서 크레딧 구매'
+        );
+      } else {
+        alert('이미지 생성 중 오류가 발생했습니다.\n\n' + errorMessage);
+      }
 
       setScenes(prev => prev.map(s =>
         s.id === sceneId ? { ...s, isGeneratingImage: false } : s
