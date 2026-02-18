@@ -2,6 +2,12 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { AppSettings, Project, Character, Plot, Chapter } from '../types';
 
+interface TokenStatus {
+  isLimited: boolean;
+  retryTime?: string;
+  lastChecked?: number;
+}
+
 interface AppState {
   // Settings
   settings: AppSettings;
@@ -20,6 +26,10 @@ interface AppState {
   // Active Document
   activeDocumentId: string | null;
   setActiveDocument: (id: string | null) => void;
+
+  // Token Status
+  tokenStatus: TokenStatus;
+  setTokenStatus: (status: TokenStatus) => void;
 
   // Characters
   addCharacter: (character: Character) => void;
@@ -71,6 +81,20 @@ export const useAppStore = create<AppState>()(
       // Active document
       activeDocumentId: null,
       setActiveDocument: (id) => set({ activeDocumentId: id }),
+
+      // Token status
+      tokenStatus: (() => {
+        try {
+          const saved = localStorage.getItem('codex-token-status');
+          return saved ? JSON.parse(saved) : { isLimited: false };
+        } catch {
+          return { isLimited: false };
+        }
+      })(),
+      setTokenStatus: (status) => {
+        localStorage.setItem('codex-token-status', JSON.stringify(status));
+        set({ tokenStatus: status });
+      },
 
       // Character methods
       addCharacter: (character) =>
