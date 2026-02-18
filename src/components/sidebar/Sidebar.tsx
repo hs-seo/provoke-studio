@@ -1214,7 +1214,9 @@ const WebtoonTab: React.FC = () => {
     console.log('🎬 장면 생성 시작');
     console.log('활성 챕터:', activeChapter);
     console.log('유저 설정:', user?.isConfigured);
-    console.log('컨텐츠 길이:', activeChapter?.content?.length);
+
+    const storyContent = activeChapter?.scenes[0]?.content || '';
+    console.log('컨텐츠 길이:', storyContent.length);
 
     if (!activeChapter) {
       alert('활성 문서가 없습니다. 문서를 선택해주세요.');
@@ -1226,8 +1228,8 @@ const WebtoonTab: React.FC = () => {
       return;
     }
 
-    if (!activeChapter.content || activeChapter.content.trim().length < 100) {
-      alert(`스토리가 너무 짧습니다. 최소 100자 이상 작성해주세요.\n현재: ${activeChapter.content?.length || 0}자`);
+    if (!storyContent || storyContent.trim().length < 100) {
+      alert(`스토리가 너무 짧습니다. 최소 100자 이상 작성해주세요.\n현재: ${storyContent.length}자`);
       return;
     }
 
@@ -1242,7 +1244,7 @@ const WebtoonTab: React.FC = () => {
         prompt: `당신은 웹툰 스토리보드 전문가입니다. 다음 스토리를 웹툰 장면(컷)으로 분할하고, 각 장면에 대한 시각적 설명을 제공하세요.
 
 **스토리**:
-${activeChapter.content}
+${storyContent}
 
 **요구사항**:
 - 스토리를 4-8개의 주요 장면으로 분할
