@@ -323,6 +323,8 @@ const AnalysisTab: React.FC = () => {
     return localStorage.getItem('ai-custom-instructions') || '';
   });
   const [showCustomInstructions, setShowCustomInstructions] = useState(false);
+  const [isEditingTargetChars, setIsEditingTargetChars] = useState(false);
+  const [targetCharsInput, setTargetCharsInput] = useState('');
 
   // Persist custom instructions
   useEffect(() => {
@@ -1424,20 +1426,28 @@ const SettingsTab: React.FC = () => {
         </label>
         <input
           type="text"
-          value={settings.defaultEpisodeTargetChars.toLocaleString()}
+          value={isEditingTargetChars ? targetCharsInput : settings.defaultEpisodeTargetChars.toLocaleString()}
+          onFocus={() => {
+            setIsEditingTargetChars(true);
+            setTargetCharsInput(settings.defaultEpisodeTargetChars.toString());
+          }}
           onChange={(e) => {
+            const value = e.target.value;
+            setTargetCharsInput(value);
+
             // 쉼표 제거하고 숫자만 추출
-            const numericValue = e.target.value.replace(/,/g, '');
+            const numericValue = value.replace(/[^0-9]/g, '');
             const parsed = parseInt(numericValue || '0', 10);
-            if (!isNaN(parsed)) {
+            if (!isNaN(parsed) && parsed > 0) {
               updateSettings({
                 defaultEpisodeTargetChars: Math.max(500, parsed),
               });
             }
           }}
-          onBlur={(e) => {
+          onBlur={() => {
+            setIsEditingTargetChars(false);
             // 포커스 아웃 시 최소값 체크
-            const numericValue = e.target.value.replace(/,/g, '');
+            const numericValue = targetCharsInput.replace(/[^0-9]/g, '');
             const parsed = parseInt(numericValue || '0', 10);
             if (isNaN(parsed) || parsed < 500) {
               updateSettings({ defaultEpisodeTargetChars: 5500 });
