@@ -126,6 +126,8 @@ export interface AppSettings {
   theme: 'light' | 'dark' | 'auto';
   fontSize: number;
   fontFamily: string;
+  textCountUnit: 'chars' | 'words';
+  defaultEpisodeTargetChars: number;
   focusMode: boolean;
   autoSave: boolean;
   autoSaveInterval: number; // in seconds

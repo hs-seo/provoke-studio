@@ -20,7 +20,15 @@ interface Suggestion {
 
 export const AIAssistant: React.FC<AIAssistantProps> = ({ content, onReplace }) => {
   const { user } = useAuthStore();
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>(() => {
+    // Load persisted suggestions from localStorage
+    try {
+      const saved = localStorage.getItem('ai-suggestions');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [lastAnalyzedContent, setLastAnalyzedContent] = useState('');
   const [panelWidth, setPanelWidth] = useState(() => {
@@ -28,6 +36,13 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ content, onReplace }) 
     return saved ? parseInt(saved) : 320; // Default 320px (w-80)
   });
   const [isResizing, setIsResizing] = useState(false);
+
+  // Persist suggestions to localStorage whenever they change
+  useEffect(() => {
+    if (suggestions.length > 0) {
+      localStorage.setItem('ai-suggestions', JSON.stringify(suggestions));
+    }
+  }, [suggestions]);
 
   // Handle resize
   useEffect(() => {
@@ -169,11 +184,22 @@ ${recentContent}
 
 
   const dismissSuggestion = (id: string) => {
-    setSuggestions((prev) => prev.filter((s) => s.id !== id));
+    setSuggestions((prev) => {
+      const updated = prev.filter((s) => s.id !== id);
+      if (updated.length === 0) {
+        localStorage.removeItem('ai-suggestions');
+      }
+      return updated;
+    });
+  };
+
+  const clearAllSuggestions = () => {
+    setSuggestions([]);
+    localStorage.removeItem('ai-suggestions');
   };
 
   const manualAnalyze = () => {
-    setSuggestions([]); // 기존 제안 제거
+    clearAllSuggestions(); // 기존 제안 제거
     analyzeContent();
   };
 
@@ -193,28 +219,36 @@ ${recentContent}
       style={{ width: `${panelWidth}px` }}
     >
       {/* Header */}
-      <div className="h-[52px] px-6 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-            <FiZap className="text-blue-600" size={16} />
-            AI 제안
-          </h3>
+      <div className="h-[52px] px-6 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+          <FiZap className="text-blue-600" size={16} />
+          AI 제안
+          {isAnalyzing && (
+            <span className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+              <div className="w-1 h-1 bg-blue-600 rounded-full animate-pulse"></div>
+              분석 중...
+            </span>
+          )}
+        </h3>
+        <div className="flex items-center gap-1">
           <button
             onClick={manualAnalyze}
             disabled={isAnalyzing}
             className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
-            title="새로고침"
+            title="새로 분석"
           >
             <FiRefreshCw className={`text-gray-600 dark:text-gray-400 ${isAnalyzing ? 'animate-spin' : ''}`} size={16} />
           </button>
+          {suggestions.length > 0 && !isAnalyzing && (
+            <button
+              onClick={clearAllSuggestions}
+              className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+              title="전체 초기화"
+            >
+              <FiX className="text-gray-600 dark:text-gray-400" size={16} />
+            </button>
+          )}
         </div>
-
-        {isAnalyzing && (
-          <div className="mt-2 text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
-            <div className="w-1 h-1 bg-blue-600 rounded-full animate-pulse"></div>
-            분석 중...
-          </div>
-        )}
       </div>
 
       {/* Suggestions */}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { useAuthStore } from '../../store/useAuthStore';
+import { Chapter } from '../../types';
 import { authService } from '../../services/api/authService';
 import { CharacterForm } from './CharacterForm';
 import { PlotForm } from './PlotForm';
@@ -14,6 +15,7 @@ import {
   FiChevronLeft,
   FiChevronRight,
   FiBarChart2,
+  FiZap,
 } from 'react-icons/fi';
 
 type SidebarTab = 'documents' | 'characters' | 'plots' | 'analysis' | 'settings';
@@ -161,7 +163,17 @@ const TabButton: React.FC<TabButtonProps> = ({ icon, label, active, onClick }) =
 );
 
 const DocumentsTab: React.FC = () => {
-  const { currentProject, addChapter, setActiveDocument } = useAppStore();
+  const { currentProject, addChapter, setActiveDocument, settings } = useAppStore();
+
+  const getChapterCharCount = (chapter: Chapter) => {
+    return chapter.scenes.reduce((total, scene) => total + (scene.content?.length || 0), 0);
+  };
+
+  const getChapterWordCount = (chapter: Chapter) => {
+    const text = chapter.scenes.map((scene) => scene.content || '').join(' ');
+    const trimmed = text.trim();
+    return trimmed ? trimmed.split(/\s+/).filter(Boolean).length : 0;
+  };
 
   const handleNewDocument = () => {
     const newChapter = {
@@ -199,7 +211,9 @@ const DocumentsTab: React.FC = () => {
               {chapter.title}
             </h3>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {chapter.wordCount} words
+              {settings.textCountUnit === 'chars'
+                ? `${getChapterCharCount(chapter)} 글자`
+                : `${getChapterWordCount(chapter)} 단어`}
             </p>
           </div>
         ))}
@@ -288,21 +302,94 @@ const PlotsTab: React.FC = () => {
 };
 
 const AnalysisTab: React.FC = () => {
-  const { currentProject, activeDocumentId, updateChapter } = useAppStore();
+  const { currentProject, activeDocumentId, updateChapter, settings } = useAppStore();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState<any>(null);
+  const [analysis, setAnalysis] = useState<any>(() => {
+    // Load persisted analysis from localStorage
+    try {
+      const saved = localStorage.getItem('ai-analysis-result');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [isWritingNext, setIsWritingNext] = useState(false);
   const [isRevising, setIsRevising] = useState(false);
+  const [isExpanding, setIsExpanding] = useState(false);
+  const [documentScope, setDocumentScope] = useState<'all' | 'active' | 'selected'>('all');
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
+  const [expansionMode, setExpansionMode] = useState<'auto' | 'story' | 'description' | 'dialogue'>('auto');
 
-  // Get all content
-  const getAllContent = () => {
-    return currentProject?.chapters
-      .map(ch => ch.scenes.map(s => s.content).join('\n\n'))
-      .join('\n\n---\n\n') || '';
+  // Persist analysis to localStorage whenever it changes
+  useEffect(() => {
+    if (analysis) {
+      localStorage.setItem('ai-analysis-result', JSON.stringify(analysis));
+    }
+  }, [analysis]);
+
+  // Clear analysis
+  const handleClearAnalysis = () => {
+    if (confirm('분석 결과를 초기화하시겠습니까?')) {
+      setAnalysis(null);
+      localStorage.removeItem('ai-analysis-result');
+    }
+  };
+
+  const chapters = currentProject?.chapters || [];
+  const activeChapter = chapters.find((chapter) => chapter.id === activeDocumentId) || null;
+
+  const getChapterContent = (chapterId: string) => {
+    const chapter = chapters.find((ch) => ch.id === chapterId);
+    if (!chapter) return '';
+    return chapter.scenes.map((scene) => scene.content || '').join('\n\n');
+  };
+
+  const getScopedChapters = () => {
+    if (documentScope === 'active') {
+      return activeChapter ? [activeChapter] : [];
+    }
+
+    if (documentScope === 'selected') {
+      return chapters.filter((chapter) => selectedDocumentIds.includes(chapter.id));
+    }
+
+    return chapters;
+  };
+
+  const getScopeLabel = () => {
+    if (documentScope === 'active') return activeChapter?.title || '활성 문서';
+    if (documentScope === 'selected') {
+      const selectedTitles = chapters
+        .filter((chapter) => selectedDocumentIds.includes(chapter.id))
+        .map((chapter) => chapter.title);
+      return selectedTitles.length > 0 ? selectedTitles.join(', ') : '선택 문서 없음';
+    }
+    return '전체 문서';
+  };
+
+  const getScopedContent = () => {
+    const scopedChapters = getScopedChapters();
+    return scopedChapters
+      .map((chapter) => chapter.scenes.map((scene) => scene.content || '').join('\n\n'))
+      .join('\n\n---\n\n');
+  };
+
+  const toggleSelectedDocument = (chapterId: string) => {
+    setSelectedDocumentIds((prev) =>
+      prev.includes(chapterId)
+        ? prev.filter((id) => id !== chapterId)
+        : [...prev, chapterId]
+    );
   };
 
   const handleAnalyze = async () => {
-    const content = getAllContent();
+    const scopedChapters = getScopedChapters();
+    if (documentScope === 'selected' && scopedChapters.length === 0) {
+      alert('분석할 문서를 최소 1개 선택해주세요.');
+      return;
+    }
+
+    const content = getScopedContent();
     if (!content.trim()) {
       alert('분석할 내용이 없습니다. 먼저 글을 작성해주세요.');
       return;
@@ -315,20 +402,22 @@ const AnalysisTab: React.FC = () => {
 
       const wordCount = content.trim().split(/\s+/).filter(Boolean).length;
       const charCount = content.length;
+      const targetChars = settings.defaultEpisodeTargetChars;
 
       // AI 분석 요청 - 웹소설/웹툰 전략 중심
       const response = await claudeServiceProxy.generateText({
         prompt: `당신은 국내 웹소설/웹툰 전문 스토리 컨설턴트입니다. 다음 작품을 분석하고, **상업적 성공**을 위한 실전 피드백을 제공하세요.
 
+    **분석 범위**: ${getScopeLabel()}
 **현재 분량**: ${charCount}자 (${wordCount}단어)
-**목표**: 회차당 5,000-5,500자, 매회 유료 결제 유도, 절벽 엔딩(cliffhanger) 필수
+    **목표**: 회차당 약 ${targetChars}자, 매회 유료 결제 유도, 절벽 엔딩(cliffhanger) 필수
 
 다음 JSON 형식으로 답변하세요 (markdown 코드 블록 없이 순수 JSON만):
 
 {
   "episode_analysis": {
     "current_length": ${charCount},
-    "target_length": "5000-5500자",
+    "target_length": "약 ${targetChars}자",
     "pacing": "현재 회차의 템포 분석 (너무 느림/적절/너무 빠름)",
     "cliffhanger_strength": "현재 엔딩의 절벽 강도 (1-10점)",
     "cliffhanger_feedback": "절벽 엔딩 개선 방법"
@@ -356,7 +445,7 @@ const AnalysisTab: React.FC = () => {
     "현재 회차 엔딩을 강화할 절벽 아이디어 3가지"
   ],
   "next_episode_ideas": [
-    "다음 화 전개 아이디어 (5000자 분량, 절벽 포함)"
+    "다음 화 전개 아이디어 (약 ${targetChars}자 분량, 절벽 포함)"
   ],
   "revision_priority": [
     "지금 당장 수정하면 좋을 부분 (우선순위 순)"
@@ -404,19 +493,27 @@ ${content}`,
   const handleWriteNextEpisode = async () => {
     if (!analysis || !activeDocumentId) return;
 
+    if (documentScope === 'selected' && selectedDocumentIds.length === 0) {
+      alert('참고할 문서를 최소 1개 선택해주세요.');
+      return;
+    }
+
     setIsWritingNext(true);
     try {
       const { claudeServiceProxy } = await import('../../services/api/aiServiceProxy');
-      const currentContent = getAllContent();
+      const currentContent = getScopedContent();
+      const targetChars = settings.defaultEpisodeTargetChars;
 
       const response = await claudeServiceProxy.generateText({
         prompt: `당신은 국내 웹소설 작가입니다. 다음 회차를 작성하세요.
 
 **요구사항**:
-- 분량: 5,000-5,500자
+- 분량: 약 ${targetChars}자
 - 이전 화의 절벽 엔딩을 바로 이어받아 시작
 - 회차 중반에 반전이나 사건 배치
 - 마지막은 강력한 절벽 엔딩으로 마무리 (다음 화 궁금증 유발)
+
+**참고 범위**: ${getScopeLabel()}
 
 **분석 결과 반영**:
 ${analysis.next_episode_ideas ? '- 다음 화 아이디어: ' + analysis.next_episode_ideas.join(', ') : ''}
@@ -468,14 +565,19 @@ ${currentContent.slice(-2000)}
   // Revise current content based on analysis
   const handleReviseContent = async () => {
     if (!analysis || !activeDocumentId) return;
-
-    const activeChapter = currentProject?.chapters.find(ch => ch.id === activeDocumentId);
     if (!activeChapter) return;
+
+    if (documentScope === 'selected' && selectedDocumentIds.length === 0) {
+      alert('참고할 문서를 최소 1개 선택해주세요.');
+      return;
+    }
 
     setIsRevising(true);
     try {
       const { claudeServiceProxy } = await import('../../services/api/aiServiceProxy');
       const currentContent = activeChapter.scenes[0]?.content || '';
+      const referenceContent = getScopedContent();
+      const targetChars = settings.defaultEpisodeTargetChars;
 
       const response = await claudeServiceProxy.generateText({
         prompt: `당신은 국내 웹소설 전문 편집자입니다. 다음 원고를 수정하세요.
@@ -486,11 +588,20 @@ ${analysis.revision_priority ? analysis.revision_priority.map((item: string, i: 
 **절벽 엔딩 강화**:
 ${analysis.cliffhanger_suggestions ? analysis.cliffhanger_suggestions[0] : '마지막을 더 강렬하게'}
 
+**회차 목표 분량**:
+약 ${targetChars}자
+
+**참고 범위**:
+${getScopeLabel()}
+
 **상업성 체크리스트 반영**:
 ${analysis.commercial_checklist ? analysis.commercial_checklist.filter((item: any) => !item.status).map((item: any) => `- ${item.item}: ${item.feedback}`).join('\n') : ''}
 
 **원본**:
 ${currentContent}
+
+**참고 문맥 (최근 발췌)**:
+${referenceContent.slice(-1500)}
 
 수정된 원고를 작성하세요 (순수 소설 텍스트만, 설명 없이):`,
         maxTokens: 2000,
@@ -518,16 +629,164 @@ ${currentContent}
     }
   };
 
+  const handleExpandEpisode = async () => {
+    if (!activeDocumentId || !activeChapter) return;
+
+    const currentContent = getChapterContent(activeDocumentId);
+    if (!currentContent.trim()) {
+      alert('분량을 보강할 원고가 없습니다. 먼저 내용을 작성해주세요.');
+      return;
+    }
+
+    const targetChars = settings.defaultEpisodeTargetChars;
+    const currentChars = currentContent.length;
+    const missingChars = targetChars - currentChars;
+
+    if (missingChars <= 0) {
+      alert(`이미 목표 글자수(${targetChars}자)를 달성했습니다.`);
+      return;
+    }
+
+    if (documentScope === 'selected' && selectedDocumentIds.length === 0) {
+      alert('참고할 문서를 최소 1개 선택해주세요.');
+      return;
+    }
+
+    const referenceContent = getScopedContent();
+
+    const strategyText =
+      expansionMode === 'story'
+        ? '스토리 보강(사건/갈등/반전 중심)'
+        : expansionMode === 'description'
+        ? '묘사 보강(감각/공간/감정 묘사 중심)'
+        : expansionMode === 'dialogue'
+        ? '대화 보강(캐릭터 간 대화와 심리전 중심)'
+        : '자동 판단(원고 흐름에 맞춰 스토리/묘사/대화를 균형 있게 보강)';
+
+    setIsExpanding(true);
+    try {
+      const { claudeServiceProxy } = await import('../../services/api/aiServiceProxy');
+      const response = await claudeServiceProxy.generateText({
+        prompt: `당신은 국내 웹소설 전문 작가/편집자입니다. 기존 톤과 스타일을 유지하며 분량을 보강하세요.
+
+**현재 글자수**: ${currentChars}자
+**목표 글자수**: ${targetChars}자
+**부족 분량**: 약 ${missingChars}자
+**보강 방식**: ${strategyText}
+**참고 범위**: ${getScopeLabel()}
+
+**필수 조건**:
+- 기존 문장과 설정/인물의 일관성 유지
+- 이미 있는 핵심 사건은 삭제하지 말 것
+- 의미 없는 반복/군더더기 금지
+- 자연스럽게 흐름을 확장하여 최종 분량을 목표치 근처로 맞출 것
+
+**참고 문맥 (최근 발췌)**:
+${referenceContent.slice(-1800)}
+
+**원본 원고**:
+${currentContent}
+
+보강된 최종 원고만 출력하세요 (설명 없이):`,
+        maxTokens: 2600,
+        temperature: 0.75,
+      });
+
+      const expandedContent = response.text;
+      const expandedWordCount = expandedContent.trim().split(/\s+/).filter(Boolean).length;
+
+      const updatedScenes = activeChapter.scenes.length > 0
+        ? activeChapter.scenes.map((scene, idx) =>
+            idx === 0 ? { ...scene, content: expandedContent } : scene
+          )
+        : [{
+            id: Date.now().toString(),
+            title: 'Scene 1',
+            content: expandedContent,
+            order: 1,
+            characters: [],
+            status: 'draft' as const,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }];
+
+      updateChapter(activeDocumentId, {
+        scenes: updatedScenes,
+        wordCount: expandedWordCount,
+        updatedAt: new Date(),
+      });
+
+      alert(`✅ 분량 보강 완료 (${expandedContent.length}자)`);
+    } catch (error: any) {
+      console.error('Expand episode error:', error);
+      alert('분량 보강 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'));
+    } finally {
+      setIsExpanding(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
-      <button
-        onClick={handleAnalyze}
-        disabled={isAnalyzing}
-        className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-lg font-medium transition-all disabled:opacity-50"
-      >
-        <FiBarChart2 size={18} />
-        {isAnalyzing ? '분석 중...' : 'AI 스토리 분석'}
-      </button>
+      <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 space-y-3">
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+            분석/생성 참고 범위
+          </label>
+          <select
+            value={documentScope}
+            onChange={(e) => setDocumentScope(e.target.value as 'all' | 'active' | 'selected')}
+            className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          >
+            <option value="all">전체 문서</option>
+            <option value="active">현재 문서만</option>
+            <option value="selected">문서 선택 (N개)</option>
+          </select>
+        </div>
+
+        {documentScope === 'selected' && (
+          <div className="max-h-36 overflow-auto space-y-1.5 p-2 rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60">
+            {chapters.length === 0 ? (
+              <p className="text-xs text-gray-500 dark:text-gray-400">선택할 문서가 없습니다.</p>
+            ) : (
+              chapters.map((chapter) => (
+                <label key={chapter.id} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={selectedDocumentIds.includes(chapter.id)}
+                    onChange={() => toggleSelectedDocument(chapter.id)}
+                    className="rounded"
+                  />
+                  <span className="truncate">{chapter.title}</span>
+                </label>
+              ))
+            )}
+          </div>
+        )}
+
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          현재 범위: {getScopeLabel()}
+        </p>
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          onClick={handleAnalyze}
+          disabled={isAnalyzing}
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-lg font-medium transition-all disabled:opacity-50"
+        >
+          <FiBarChart2 size={18} />
+          {isAnalyzing ? '분석 중...' : 'AI 스토리 분석'}
+        </button>
+        {analysis && !isAnalyzing && (
+          <button
+            onClick={handleClearAnalysis}
+            className="px-3 py-3 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg transition-all"
+            title="분석 결과 초기화"
+          >
+            <FiZap size={18} className="rotate-180" />
+          </button>
+        )}
+      </div>
 
       {/* Action buttons when analysis exists */}
       {analysis && !isAnalyzing && (
@@ -549,6 +808,38 @@ ${currentContent}
           >
             <FiBarChart2 size={16} />
             {isRevising ? '수정 중...' : '원고 수정'}
+          </button>
+        </div>
+      )}
+
+      {activeChapter && (
+        <div className="p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-semibold text-amber-800 dark:text-amber-300">회차 분량 보강</span>
+            <span className="text-amber-700 dark:text-amber-400">
+              현재 {getChapterContent(activeChapter.id).length}자 / 목표 {settings.defaultEpisodeTargetChars}자
+            </span>
+          </div>
+
+          <select
+            value={expansionMode}
+            onChange={(e) => setExpansionMode(e.target.value as 'auto' | 'story' | 'description' | 'dialogue')}
+            className="w-full px-3 py-2 text-sm border border-amber-300 dark:border-amber-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+          >
+            <option value="auto">자동 판단 (스토리/묘사 균형)</option>
+            <option value="story">스토리 보강 중심</option>
+            <option value="description">묘사 보강 중심</option>
+            <option value="dialogue">대화 보강 중심</option>
+          </select>
+
+          <button
+            onClick={handleExpandEpisode}
+            disabled={isExpanding}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-medium transition-all disabled:opacity-50"
+            title="현재 회차를 목표 글자수에 맞게 보강"
+          >
+            <FiZap size={16} />
+            {isExpanding ? '보강 중...' : '분량 보강하기'}
           </button>
         </div>
       )}
@@ -1020,6 +1311,38 @@ const SettingsTab: React.FC = () => {
             {isSavingKey ? '저장 중...' : 'AI 설정 저장'}
           </button>
         </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          문서 분량 단위 (좌측 문서 목록)
+        </label>
+        <select
+          value={settings.textCountUnit}
+          onChange={(e) => updateSettings({ textCountUnit: e.target.value as 'chars' | 'words' })}
+          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+        >
+          <option value="chars">글자수 (기본)</option>
+          <option value="words">단어수</option>
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          회차 목표 글자수 (기본)
+        </label>
+        <input
+          type="number"
+          min="500"
+          step="100"
+          value={settings.defaultEpisodeTargetChars}
+          onChange={(e) =>
+            updateSettings({
+              defaultEpisodeTargetChars: Math.max(500, parseInt(e.target.value || '5500', 10)),
+            })
+          }
+          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+        />
       </div>
 
       <div>

@@ -45,6 +45,8 @@ export const useAppStore = create<AppState>()(
         theme: 'auto',
         fontSize: 16,
         fontFamily: 'serif',
+        textCountUnit: 'chars',
+        defaultEpisodeTargetChars: 5500,
         focusMode: false,
         autoSave: true,
         autoSaveInterval: 30,
