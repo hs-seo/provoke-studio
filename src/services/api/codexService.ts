@@ -79,6 +79,20 @@ export class CodexService {
 
     return { text };
   }
+
+  // Generate image using Codex CLI (which uses authenticated OpenAI)
+  async generateImage(prompt: string, size: string = '1024x1024'): Promise<{ url: string }> {
+    try {
+      const imageUrl = await invoke<string>('codex_generate_image', {
+        prompt,
+        size,
+      });
+
+      return { url: imageUrl };
+    } catch (error) {
+      throw new Error(`이미지 생성 실패: ${error}`);
+    }
+  }
 }
 
 export const codexService = new CodexService();

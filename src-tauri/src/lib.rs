@@ -84,6 +84,53 @@ fn check_codex_installed() -> Result<bool, String> {
     }
 }
 
+#[tauri::command]
+async fn codex_generate_image(
+    prompt: String,
+    size: String,
+) -> Result<String, String> {
+    // Use Codex CLI to generate image via OpenAI DALL-E 3
+    // Codex has access to authenticated OpenAI APIs
+    let image_prompt = format!(
+        "Please generate an image using DALL-E 3 with the following prompt and return ONLY the image URL (nothing else):\n\nPrompt: {}\nSize: {}",
+        prompt, size
+    );
+
+    let mut cmd = Command::new("codex");
+    cmd.arg("exec");
+    cmd.arg("--model").arg("gpt-5.2");
+    cmd.arg("--skip-git-repo-check");
+    cmd.arg(&image_prompt);
+
+    let output = cmd
+        .output()
+        .map_err(|e| format!("Failed to execute Codex CLI: {}", e))?;
+
+    if !output.status.success() {
+        let error = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Codex CLI error: {}", error));
+    }
+
+    let response = String::from_utf8(output.stdout)
+        .map_err(|e| format!("Failed to parse Codex output: {}", e))?;
+
+    // Extract URL from response (should be a URL starting with https://)
+    let trimmed = response.trim();
+    if trimmed.starts_with("http") {
+        Ok(trimmed.to_string())
+    } else {
+        // If not a direct URL, try to extract URL from the response
+        let lines: Vec<&str> = trimmed.lines().collect();
+        for line in lines {
+            let line = line.trim();
+            if line.starts_with("http") {
+                return Ok(line.to_string());
+            }
+        }
+        Err(format!("Failed to extract image URL from response: {}", trimmed))
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -94,7 +141,8 @@ pub fn run() {
             codex_improve_text,
             codex_continue_story,
             codex_analyze_story,
-            check_codex_installed
+            check_codex_installed,
+            codex_generate_image
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

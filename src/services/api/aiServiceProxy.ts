@@ -173,13 +173,30 @@ export class AIServiceProxy {
   }
 
   async generateImage(request: ImageRequest): Promise<ImageResponse> {
-    // Image generation using OpenAI DALL-E 3
+    // Check if Codex is available (use cached result)
+    if (this.codexAvailable === null) {
+      this.codexAvailable = await codexService.isCodexInstalled();
+    }
+
+    // Prefer Codex if available (uses authenticated OpenAI)
+    if (this.codexAvailable) {
+      console.log('🎨 Codex CLI를 통한 이미지 생성:', request.prompt);
+      const result = await codexService.generateImage(
+        request.prompt,
+        request.size || '1024x1024'
+      );
+      return {
+        url: result.url,
+      };
+    }
+
+    // Fallback to direct OpenAI API with API key
     const apiKey = localStorage.getItem('openai_api_key');
     if (!apiKey) {
       throw new Error('이미지 생성을 위해서는 OpenAI API Key가 필요합니다.\n설정 탭에서 OpenAI API Key를 입력해주세요.');
     }
 
-    console.log('🎨 DALL-E 3 이미지 생성 요청:', request.prompt);
+    console.log('🎨 DALL-E 3 이미지 생성 요청 (API Key):', request.prompt);
 
     const response = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
