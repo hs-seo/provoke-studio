@@ -1196,17 +1196,22 @@ ${currentContent}
   );
 };
 
+interface WebtoonScene {
+  id: string;
+  sceneNumber: number;
+  description: string;
+  imagePrompt: string;
+  characters: string[];
+  imageUrl?: string;
+  isGeneratingImage?: boolean;
+  showPrompt?: boolean;
+}
+
 const WebtoonTab: React.FC = () => {
   const { currentProject, activeDocumentId } = useAppStore();
   const { user } = useAuthStore();
   const [isGenerating, setIsGenerating] = useState(false);
-  const [scenes, setScenes] = useState<Array<{
-    id: string;
-    sceneNumber: number;
-    description: string;
-    imagePrompt: string;
-    characters: string[];
-  }>>([]);
+  const [scenes, setScenes] = useState<WebtoonScene[]>([]);
 
   const activeChapter = currentProject?.chapters.find(ch => ch.id === activeDocumentId);
 
@@ -1246,12 +1251,23 @@ const WebtoonTab: React.FC = () => {
 **스토리**:
 ${storyContent}
 
+**중요: 캐릭터와 배경의 일관성 유지**:
+1. 먼저 스토리에서 등장하는 모든 캐릭터의 외형(머리색, 눈색, 옷차림, 체격 등)을 파악하세요
+2. 주요 배경/장소의 특징(건물 스타일, 시대, 분위기 등)을 파악하세요
+3. 같은 캐릭터가 여러 장면에 나올 때 외형 설명을 일관되게 유지하세요
+4. 같은 장소가 여러 장면에 나올 때 배경 설명을 일관되게 유지하세요
+
 **요구사항**:
 - 스토리를 4-8개의 주요 장면으로 분할
 - 각 장면마다 다음 정보를 JSON 배열로 출력:
   * sceneNumber: 장면 번호 (1부터 시작)
-  * description: 장면 설명 (1-2문장, 무슨 일이 일어나는지)
-  * imagePrompt: 이미지 생성을 위한 영어 프롬프트 (배경, 캐릭터, 감정, 구도 등 상세히)
+  * description: 장면 설명 (한글, 1-2문장, 무슨 일이 일어나는지)
+  * imagePrompt: DALL-E 3용 영어 프롬프트. 반드시 다음을 포함:
+    - 캐릭터 외형 (동일 인물은 항상 같은 외형으로: "silver-haired man with blue eyes, wearing black coat")
+    - 배경/장소 (동일 장소는 항상 같은 스타일로: "traditional Korean room with wooden floor")
+    - 구도/앵글 (close-up, wide shot, medium shot 등)
+    - 분위기/조명 (dark, bright, dramatic lighting 등)
+    - 스타일 (webtoon style, manga style, digital painting 등)
   * characters: 등장하는 캐릭터 이름 배열
 
 **출력 형식** (JSON만 출력, 다른 텍스트 없이):
@@ -1259,8 +1275,8 @@ ${storyContent}
   {
     "sceneNumber": 1,
     "description": "...",
-    "imagePrompt": "...",
-    "characters": ["..."]
+    "imagePrompt": "Webtoon style digital painting. A young silver-haired man with blue eyes wearing black traditional Korean coat, standing in dark alley, dramatic lighting, medium shot, mysterious atmosphere",
+    "characters": ["캐릭터명"]
   }
 ]`,
         maxTokens: 2000,
@@ -1304,6 +1320,52 @@ ${storyContent}
       console.log('🏁 장면 생성 종료');
       setIsGenerating(false);
     }
+  };
+
+  const handleGenerateImage = async (sceneId: string) => {
+    const scene = scenes.find(s => s.id === sceneId);
+    if (!scene) return;
+
+    console.log('🎨 이미지 생성 시작:', scene.sceneNumber);
+
+    // 해당 장면의 이미지 생성 중 상태로 변경
+    setScenes(prev => prev.map(s =>
+      s.id === sceneId ? { ...s, isGeneratingImage: true } : s
+    ));
+
+    try {
+      const { claudeServiceProxy } = await import('../../services/api/aiServiceProxy');
+
+      // DALL-E 3를 사용하여 이미지 생성
+      console.log('📡 이미지 생성 API 호출:', scene.imagePrompt);
+
+      const imageResponse = await claudeServiceProxy.generateImage({
+        prompt: scene.imagePrompt,
+        size: '1024x1024',
+      });
+
+      console.log('✅ 이미지 생성 완료:', imageResponse.url);
+
+      // 생성된 이미지 URL 저장
+      setScenes(prev => prev.map(s =>
+        s.id === sceneId
+          ? { ...s, imageUrl: imageResponse.url, isGeneratingImage: false }
+          : s
+      ));
+    } catch (error: any) {
+      console.error('이미지 생성 오류:', error);
+      alert('이미지 생성 중 오류가 발생했습니다.\n\n' + (error.message || error));
+
+      setScenes(prev => prev.map(s =>
+        s.id === sceneId ? { ...s, isGeneratingImage: false } : s
+      ));
+    }
+  };
+
+  const togglePrompt = (sceneId: string) => {
+    setScenes(prev => prev.map(s =>
+      s.id === sceneId ? { ...s, showPrompt: !s.showPrompt } : s
+    ));
   };
 
   if (!user?.isConfigured) {
@@ -1376,20 +1438,57 @@ ${storyContent}
                 </div>
               )}
 
-              <div className="bg-white dark:bg-gray-800 rounded p-2 border border-gray-200 dark:border-gray-700">
-                <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">
-                  🎨 이미지 프롬프트 (영문)
+              {/* 생성된 이미지 표시 */}
+              {scene.imageUrl && (
+                <div className="mb-2 rounded-lg overflow-hidden border border-purple-300 dark:border-purple-700">
+                  <img
+                    src={scene.imageUrl}
+                    alt={`Scene ${scene.sceneNumber}`}
+                    className="w-full h-auto"
+                  />
                 </div>
-                <p className="text-xs text-gray-600 dark:text-gray-400 font-mono">
-                  {scene.imagePrompt}
-                </p>
+              )}
+
+              {/* 이미지 생성 중 */}
+              {scene.isGeneratingImage && (
+                <div className="mb-2 bg-white dark:bg-gray-800 rounded-lg border border-purple-300 dark:border-purple-700 p-8 text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-2"></div>
+                  <p className="text-xs text-gray-500">이미지 생성 중...</p>
+                </div>
+              )}
+
+              {/* 이미지 생성/재생성 버튼 */}
+              <div className="mb-2">
+                <button
+                  onClick={() => handleGenerateImage(scene.id)}
+                  disabled={scene.isGeneratingImage}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg text-xs font-medium transition-all disabled:opacity-50"
+                >
+                  <FiImage size={14} />
+                  {scene.imageUrl ? '이미지 재생성' : '이미지 생성'}
+                </button>
+              </div>
+
+              {/* 이미지 프롬프트 (토글) */}
+              <div className="bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => togglePrompt(scene.id)}
+                  className="w-full flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                >
+                  <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400">
+                    🎨 이미지 프롬프트 {scene.showPrompt ? '▼' : '▶'}
+                  </div>
+                </button>
+                {scene.showPrompt && (
+                  <div className="p-2 pt-0">
+                    <p className="text-xs text-gray-600 dark:text-gray-400 font-mono leading-relaxed">
+                      {scene.imagePrompt}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           ))}
-
-          <div className="pt-2 text-xs text-gray-500 dark:text-gray-400 text-center">
-            💡 이미지 프롬프트를 DALL-E, Midjourney, Stable Diffusion 등에서 사용하세요
-          </div>
         </div>
       )}
 

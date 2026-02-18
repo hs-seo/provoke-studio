@@ -121,6 +121,18 @@ export interface AIResponse {
   };
 }
 
+export interface ImageRequest {
+  prompt: string;
+  size?: '1024x1024' | '1792x1024' | '1024x1792';
+  quality?: 'standard' | 'hd';
+  style?: 'vivid' | 'natural';
+}
+
+export interface ImageResponse {
+  url: string;
+  revisedPrompt?: string;
+}
+
 // App Settings
 export interface AppSettings {
   theme: 'light' | 'dark' | 'auto';

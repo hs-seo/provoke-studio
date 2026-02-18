@@ -1,6 +1,6 @@
 import { authService } from './authService';
 import { codexService } from './codexService';
-import { AIRequest, AIResponse } from '../../types';
+import { AIRequest, AIResponse, ImageRequest, ImageResponse } from '../../types';
 
 export class AIServiceProxy {
   private codexAvailable: boolean | null = null;
@@ -170,6 +170,43 @@ export class AIServiceProxy {
       temperature: 0.9,
     });
     return response.text;
+  }
+
+  async generateImage(request: ImageRequest): Promise<ImageResponse> {
+    // Image generation using OpenAI DALL-E 3
+    const apiKey = localStorage.getItem('openai_api_key');
+    if (!apiKey) {
+      throw new Error('이미지 생성을 위해서는 OpenAI API Key가 필요합니다.\n설정 탭에서 OpenAI API Key를 입력해주세요.');
+    }
+
+    console.log('🎨 DALL-E 3 이미지 생성 요청:', request.prompt);
+
+    const response = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'dall-e-3',
+        prompt: request.prompt,
+        n: 1,
+        size: request.size || '1024x1024',
+        quality: request.quality || 'standard',
+        style: request.style || 'vivid',
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error?.message || 'DALL-E 이미지 생성 오류');
+    }
+
+    const data = await response.json();
+    return {
+      url: data.data[0].url,
+      revisedPrompt: data.data[0].revised_prompt,
+    };
   }
 }
 
