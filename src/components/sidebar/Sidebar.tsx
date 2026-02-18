@@ -1212,6 +1212,19 @@ const WebtoonTab: React.FC = () => {
   const { user } = useAuthStore();
   const [isGenerating, setIsGenerating] = useState(false);
   const [scenes, setScenes] = useState<WebtoonScene[]>([]);
+  const [tokenStatus, setTokenStatus] = useState<{
+    isLimited: boolean;
+    retryTime?: string;
+    lastChecked?: number;
+  }>(() => {
+    // Load token status from localStorage
+    try {
+      const saved = localStorage.getItem('codex-token-status');
+      return saved ? JSON.parse(saved) : { isLimited: false };
+    } catch {
+      return { isLimited: false };
+    }
+  });
 
   const activeChapter = currentProject?.chapters.find(ch => ch.id === activeDocumentId);
 
@@ -1300,6 +1313,10 @@ ${storyContent}
             }));
             setScenes(scenesWithIds);
             console.log('✅ 장면 생성 완료:', scenesWithIds.length, '개');
+
+            // Clear token limit status on success
+            setTokenStatus({ isLimited: false });
+            localStorage.removeItem('codex-token-status');
           } else {
             console.error('JSON 매칭 실패. 원본 응답:', response.text);
             alert('AI 응답을 파싱할 수 없습니다.\n\n원본 응답:\n' + response.text.substring(0, 200));
@@ -1322,6 +1339,15 @@ ${storyContent}
       if (errorMessage.includes('usage limit')) {
         const match = errorMessage.match(/try again at (.+?)\./);
         const retryTime = match ? match[1] : '나중';
+
+        // Update token status
+        const newStatus = {
+          isLimited: true,
+          retryTime,
+          lastChecked: Date.now(),
+        };
+        setTokenStatus(newStatus);
+        localStorage.setItem('codex-token-status', JSON.stringify(newStatus));
 
         alert(
           '⚠️ Codex CLI 사용량 제한에 도달했습니다.\n\n' +
@@ -1370,6 +1396,10 @@ ${storyContent}
           ? { ...s, imageUrl: imageResponse.url, isGeneratingImage: false }
           : s
       ));
+
+      // Clear token limit status on success
+      setTokenStatus({ isLimited: false });
+      localStorage.removeItem('codex-token-status');
     } catch (error: any) {
       console.error('이미지 생성 오류:', error);
 
@@ -1379,6 +1409,15 @@ ${storyContent}
       if (errorMessage.includes('usage limit')) {
         const match = errorMessage.match(/try again at (.+?)\./);
         const retryTime = match ? match[1] : '나중';
+
+        // Update token status
+        const newStatus = {
+          isLimited: true,
+          retryTime,
+          lastChecked: Date.now(),
+        };
+        setTokenStatus(newStatus);
+        localStorage.setItem('codex-token-status', JSON.stringify(newStatus));
 
         alert(
           '⚠️ Codex CLI 사용량 제한에 도달했습니다.\n\n' +
@@ -1431,6 +1470,35 @@ ${storyContent}
       <p className="text-xs text-gray-600 dark:text-gray-400">
         현재 문서의 스토리를 웹툰 장면으로 분할하고, 각 장면의 시각적 이미지 프롬프트를 생성합니다.
       </p>
+
+      {/* Token Status Banner */}
+      {tokenStatus.isLimited ? (
+        <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+          <div className="flex items-start gap-2">
+            <span className="text-amber-600 dark:text-amber-400">⚠️</span>
+            <div className="flex-1">
+              <div className="text-xs font-semibold text-amber-900 dark:text-amber-100 mb-1">
+                Codex 사용량 제한
+              </div>
+              <div className="text-xs text-amber-700 dark:text-amber-300">
+                다음 시간까지 대기: {tokenStatus.retryTime || '나중'}
+              </div>
+              <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                💡 설정 탭에서 OpenAI API Key를 입력하면 즉시 사용 가능합니다
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+          <div className="flex items-center gap-2">
+            <span className="text-green-600 dark:text-green-400">✅</span>
+            <div className="text-xs text-green-700 dark:text-green-300">
+              Codex CLI 토큰 사용 가능
+            </div>
+          </div>
+        </div>
+      )}
 
       {isGenerating && (
         <div className="text-center py-8">
