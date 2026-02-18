@@ -1211,20 +1211,32 @@ const WebtoonTab: React.FC = () => {
   const activeChapter = currentProject?.chapters.find(ch => ch.id === activeDocumentId);
 
   const handleGenerateScenes = async () => {
-    if (!activeChapter?.content || !user?.isConfigured) {
-      alert('활성 문서의 내용이 없거나 AI가 설정되지 않았습니다.');
+    console.log('🎬 장면 생성 시작');
+    console.log('활성 챕터:', activeChapter);
+    console.log('유저 설정:', user?.isConfigured);
+    console.log('컨텐츠 길이:', activeChapter?.content?.length);
+
+    if (!activeChapter) {
+      alert('활성 문서가 없습니다. 문서를 선택해주세요.');
       return;
     }
 
-    if (activeChapter.content.length < 100) {
-      alert('스토리가 너무 짧습니다. 최소 100자 이상 작성해주세요.');
+    if (!user?.isConfigured) {
+      alert('AI가 설정되지 않았습니다. 설정 탭에서 AI를 설정해주세요.');
       return;
     }
 
+    if (!activeChapter.content || activeChapter.content.trim().length < 100) {
+      alert(`스토리가 너무 짧습니다. 최소 100자 이상 작성해주세요.\n현재: ${activeChapter.content?.length || 0}자`);
+      return;
+    }
+
+    console.log('✅ 검증 통과, AI 호출 시작');
     setIsGenerating(true);
     try {
       const { claudeServiceProxy } = await import('../../services/api/aiServiceProxy');
 
+      console.log('📡 AI 서비스 호출 중...');
       // 1. 스토리를 장면별로 분할
       const response = await claudeServiceProxy.generateText({
         prompt: `당신은 웹툰 스토리보드 전문가입니다. 다음 스토리를 웹툰 장면(컷)으로 분할하고, 각 장면에 대한 시각적 설명을 제공하세요.
@@ -1253,29 +1265,41 @@ ${activeChapter.content}
         temperature: 0.7,
       });
 
+      console.log('📥 AI 응답 받음:', response);
+
       if (response.text) {
+        console.log('응답 텍스트:', response.text);
         try {
           // JSON 파싱 시도
           const jsonMatch = response.text.match(/\[[\s\S]*\]/);
           if (jsonMatch) {
+            console.log('JSON 추출 성공:', jsonMatch[0]);
             const parsedScenes = JSON.parse(jsonMatch[0]);
+            console.log('파싱된 장면들:', parsedScenes);
             const scenesWithIds = parsedScenes.map((scene: any, index: number) => ({
               ...scene,
               id: `scene-${Date.now()}-${index}`,
             }));
             setScenes(scenesWithIds);
+            console.log('✅ 장면 생성 완료:', scenesWithIds.length, '개');
           } else {
-            alert('AI 응답을 파싱할 수 없습니다. 다시 시도해주세요.');
+            console.error('JSON 매칭 실패. 원본 응답:', response.text);
+            alert('AI 응답을 파싱할 수 없습니다.\n\n원본 응답:\n' + response.text.substring(0, 200));
           }
         } catch (parseError) {
           console.error('JSON parse error:', parseError);
-          alert('AI 응답 형식이 올바르지 않습니다. 다시 시도해주세요.');
+          console.error('파싱 시도한 텍스트:', response.text);
+          alert('AI 응답 형식이 올바르지 않습니다.\n\n에러: ' + parseError);
         }
+      } else {
+        console.error('응답에 텍스트가 없음:', response);
+        alert('AI 응답이 비어있습니다.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Scene generation error:', error);
-      alert('장면 생성 중 오류가 발생했습니다.');
+      alert('장면 생성 중 오류가 발생했습니다.\n\n에러: ' + (error.message || error));
     } finally {
+      console.log('🏁 장면 생성 종료');
       setIsGenerating(false);
     }
   };
