@@ -323,8 +323,6 @@ const AnalysisTab: React.FC = () => {
     return localStorage.getItem('ai-custom-instructions') || '';
   });
   const [showCustomInstructions, setShowCustomInstructions] = useState(false);
-  const [isEditingTargetChars, setIsEditingTargetChars] = useState(false);
-  const [targetCharsInput, setTargetCharsInput] = useState('');
 
   // Persist custom instructions
   useEffect(() => {
@@ -1198,6 +1196,8 @@ const SettingsTab: React.FC = () => {
   const [openaiKey, setOpenaiKey] = useState('');
   const [isSavingKey, setIsSavingKey] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isEditingTargetChars, setIsEditingTargetChars] = useState(false);
+  const [targetCharsInput, setTargetCharsInput] = useState('');
 
   // Load saved keys from localStorage
   useEffect(() => {
