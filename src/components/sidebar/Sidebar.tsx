@@ -1423,15 +1423,27 @@ const SettingsTab: React.FC = () => {
           회차 목표 글자수 (기본)
         </label>
         <input
-          type="number"
-          min="500"
-          step="100"
-          value={settings.defaultEpisodeTargetChars}
-          onChange={(e) =>
-            updateSettings({
-              defaultEpisodeTargetChars: Math.max(500, parseInt(e.target.value || '5500', 10)),
-            })
-          }
+          type="text"
+          value={settings.defaultEpisodeTargetChars.toLocaleString()}
+          onChange={(e) => {
+            // 쉼표 제거하고 숫자만 추출
+            const numericValue = e.target.value.replace(/,/g, '');
+            const parsed = parseInt(numericValue || '0', 10);
+            if (!isNaN(parsed)) {
+              updateSettings({
+                defaultEpisodeTargetChars: Math.max(500, parsed),
+              });
+            }
+          }}
+          onBlur={(e) => {
+            // 포커스 아웃 시 최소값 체크
+            const numericValue = e.target.value.replace(/,/g, '');
+            const parsed = parseInt(numericValue || '0', 10);
+            if (isNaN(parsed) || parsed < 500) {
+              updateSettings({ defaultEpisodeTargetChars: 5500 });
+            }
+          }}
+          placeholder="5,500"
           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
         />
       </div>
