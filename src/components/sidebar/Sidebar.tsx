@@ -319,6 +319,15 @@ const AnalysisTab: React.FC = () => {
   const [documentScope, setDocumentScope] = useState<'all' | 'active' | 'selected'>('all');
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [expansionMode, setExpansionMode] = useState<'auto' | 'story' | 'description' | 'dialogue'>('auto');
+  const [customInstructions, setCustomInstructions] = useState(() => {
+    return localStorage.getItem('ai-custom-instructions') || '';
+  });
+  const [showCustomInstructions, setShowCustomInstructions] = useState(false);
+
+  // Persist custom instructions
+  useEffect(() => {
+    localStorage.setItem('ai-custom-instructions', customInstructions);
+  }, [customInstructions]);
 
   // Persist analysis to localStorage whenever it changes
   useEffect(() => {
@@ -408,9 +417,11 @@ const AnalysisTab: React.FC = () => {
       const response = await claudeServiceProxy.generateText({
         prompt: `당신은 국내 웹소설/웹툰 전문 스토리 컨설턴트입니다. 다음 작품을 분석하고, **상업적 성공**을 위한 실전 피드백을 제공하세요.
 
-    **분석 범위**: ${getScopeLabel()}
+**분석 범위**: ${getScopeLabel()}
 **현재 분량**: ${charCount}자 (${wordCount}단어)
-    **목표**: 회차당 약 ${targetChars}자, 매회 유료 결제 유도, 절벽 엔딩(cliffhanger) 필수
+**목표**: 회차당 약 ${targetChars}자, 매회 유료 결제 유도, 절벽 엔딩(cliffhanger) 필수
+
+${customInstructions ? `**사용자 커스텀 요구사항**:\n${customInstructions}\n` : ''}
 
 다음 JSON 형식으로 답변하세요 (markdown 코드 블록 없이 순수 JSON만):
 
@@ -515,6 +526,8 @@ ${content}`,
 
 **참고 범위**: ${getScopeLabel()}
 
+${customInstructions ? `**사용자 스타일 요청**:\n${customInstructions}\n` : ''}
+
 **분석 결과 반영**:
 ${analysis.next_episode_ideas ? '- 다음 화 아이디어: ' + analysis.next_episode_ideas.join(', ') : ''}
 ${analysis.plot?.next_episode_hook ? '- 다음 화 훅: ' + analysis.plot.next_episode_hook : ''}
@@ -593,6 +606,8 @@ ${analysis.cliffhanger_suggestions ? analysis.cliffhanger_suggestions[0] : '마�
 
 **참고 범위**:
 ${getScopeLabel()}
+
+${customInstructions ? `**사용자 스타일 요청**:\n${customInstructions}\n` : ''}
 
 **상업성 체크리스트 반영**:
 ${analysis.commercial_checklist ? analysis.commercial_checklist.filter((item: any) => !item.status).map((item: any) => `- ${item.item}: ${item.feedback}`).join('\n') : ''}
@@ -675,11 +690,12 @@ ${referenceContent.slice(-1500)}
 **보강 방식**: ${strategyText}
 **참고 범위**: ${getScopeLabel()}
 
-**필수 조건**:
+${customInstructions ? `**사용자 스타일 요청 (최우선 반영)**:\n${customInstructions}\n\n` : ''}**필수 조건**:
 - 기존 문장과 설정/인물의 일관성 유지
 - 이미 있는 핵심 사건은 삭제하지 말 것
 - 의미 없는 반복/군더더기 금지
 - 자연스럽게 흐름을 확장하여 최종 분량을 목표치 근처로 맞출 것
+${customInstructions ? '- **사용자 요청 스타일/톤을 적극 반영하여 보강할 것**' : ''}
 
 **참고 문맥 (최근 발췌)**:
 ${referenceContent.slice(-1800)}
@@ -768,24 +784,99 @@ ${currentContent}
         </p>
       </div>
 
-      <div className="flex gap-2">
+      <div className="space-y-3">
+        {/* Custom Instructions Toggle */}
         <button
-          onClick={handleAnalyze}
-          disabled={isAnalyzing}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-lg font-medium transition-all disabled:opacity-50"
+          onClick={() => setShowCustomInstructions(!showCustomInstructions)}
+          className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
         >
-          <FiBarChart2 size={18} />
-          {isAnalyzing ? '분석 중...' : 'AI 스토리 분석'}
+          <span className="flex items-center gap-2">
+            <FiSettings size={14} />
+            커스텀 요구사항 {customInstructions ? '✓' : ''}
+          </span>
+          <FiChevronRight size={14} className={`transition-transform ${showCustomInstructions ? 'rotate-90' : ''}`} />
         </button>
-        {analysis && !isAnalyzing && (
-          <button
-            onClick={handleClearAnalysis}
-            className="px-3 py-3 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg transition-all"
-            title="분석 결과 초기화"
-          >
-            <FiZap size={18} className="rotate-180" />
-          </button>
+
+        {/* Custom Instructions Input */}
+        {showCustomInstructions && (
+          <div className="p-3 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 space-y-2">
+            <label className="block text-xs font-semibold text-blue-900 dark:text-blue-300">
+              AI에게 추가 요청사항
+            </label>
+
+            {/* Quick Presets */}
+            <div className="flex flex-wrap gap-1">
+              <button
+                onClick={() => setCustomInstructions('김영하 작가 스타일: 절제되고 담담한 문체, 섬세한 심리 묘사')}
+                className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-800/50 hover:bg-blue-200 dark:hover:bg-blue-700/50 text-blue-800 dark:text-blue-300 rounded transition-colors"
+              >
+                김영하 스타일
+              </button>
+              <button
+                onClick={() => setCustomInstructions('무협 스타일: 화려한 무공 묘사, 기백과 검기 표현, 고전적 어투')}
+                className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-800/50 hover:bg-blue-200 dark:hover:bg-blue-700/50 text-blue-800 dark:text-blue-300 rounded transition-colors"
+              >
+                무협
+              </button>
+              <button
+                onClick={() => setCustomInstructions('판타지 스타일: 마법과 스킬 시스템 중심, 게임적 요소, 빠른 전개')}
+                className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-800/50 hover:bg-blue-200 dark:hover:bg-blue-700/50 text-blue-800 dark:text-blue-300 rounded transition-colors"
+              >
+                판타지
+              </button>
+              <button
+                onClick={() => setCustomInstructions('로맨스 스타일: 감정선 중심, 내적 독백 풍부, 감성적 분위기')}
+                className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-800/50 hover:bg-blue-200 dark:hover:bg-blue-700/50 text-blue-800 dark:text-blue-300 rounded transition-colors"
+              >
+                로맨스
+              </button>
+              <button
+                onClick={() => setCustomInstructions('현대 액션: 빠른 템포, 짧은 문장, 긴장감 있는 전개, 영화적 묘사')}
+                className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-800/50 hover:bg-blue-200 dark:hover:bg-blue-700/50 text-blue-800 dark:text-blue-300 rounded transition-colors"
+              >
+                액션
+              </button>
+              <button
+                onClick={() => setCustomInstructions('')}
+                className="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded transition-colors"
+              >
+                초기화
+              </button>
+            </div>
+
+            <textarea
+              value={customInstructions}
+              onChange={(e) => setCustomInstructions(e.target.value)}
+              placeholder="예시:&#10;- 김영하 작가 스타일로 작성&#10;- 감각적인 묘사 위주로&#10;- 대화를 생동감 있게&#10;- 긴장감 있는 문체로"
+              className="w-full px-3 py-2 text-sm border border-blue-300 dark:border-blue-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-none"
+              rows={4}
+            />
+            <p className="text-xs text-blue-700 dark:text-blue-400">
+              💡 위 프리셋을 선택하거나, 직접 작가 스타일/문체/톤을 요청하세요
+            </p>
+          </div>
         )}
+
+        {/* Analysis Button */}
+        <div className="flex gap-2">
+          <button
+            onClick={handleAnalyze}
+            disabled={isAnalyzing}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-lg font-medium transition-all disabled:opacity-50"
+          >
+            <FiBarChart2 size={18} />
+            {isAnalyzing ? '분석 중...' : 'AI 스토리 분석'}
+          </button>
+          {analysis && !isAnalyzing && (
+            <button
+              onClick={handleClearAnalysis}
+              className="px-3 py-3 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg transition-all"
+              title="분석 결과 초기화"
+            >
+              <FiZap size={18} className="rotate-180" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Action buttons when analysis exists */}
